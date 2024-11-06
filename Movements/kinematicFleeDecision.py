@@ -3,9 +3,9 @@
 # @author Anya Marcano
 # @date 2024/11/05
 
-import sys, os
+import sys, os, math
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from DecisionTree.decision_tree import Action
+from DecisionTree.decision_tree import Action, Decision
 from Movements.static import static
 from pygame import Vector2 as Vector
 from Movements.kinematicFlee import KinematicFlee
@@ -45,7 +45,22 @@ class KinematicFleeAction(Action):
         self.screen_height = screen_height
         self.min_x = min_x
         self.max_x = max_x
+
+    def getSteering(self):
+        enemy_static = static(Vector(self.enemy["x"], self.enemy["y"]), 0)
+        player_static = static(Vector(self.player[0], self.player[1]), 0)
         
+        flee_behavior = KinematicFlee(
+            enemy_static,
+            player_static,
+            self.max_speed,
+            self.max_distance,
+            self.screen_width,
+            self.screen_height
+        )
+        
+        return flee_behavior.getSteering()
+    
     def make_decision(self):
         enemy_static = static(Vector(self.enemy["x"], self.enemy["y"]), 0)
         player_static = static(Vector(self.player[0], self.player[1]), 0)
@@ -72,3 +87,51 @@ class KinematicFleeAction(Action):
                     
             return flee_behavior
         return None
+    
+class KinematicFleeDecision(Decision):
+    def __init__(self, enemy, player_pos, player_attacking, detection_radius, kinematic_flee, attack_action, patrol_action, min_x, max_x):
+        super().__init__(attack_action, patrol_action)
+        self.enemy = enemy
+        self.player_pos = player_pos
+        self.player_attacking = player_attacking
+        self.detection_radius = detection_radius
+        self.kinematic_flee = kinematic_flee
+        self.min_x = min_x
+        self.max_x = max_x
+
+    def test_value(self):
+        # Calcula la distancia al jugador
+        dx = self.player_pos[0] - self.enemy["x"]
+        dy = self.player_pos[1] - self.enemy["y"]
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        # Verifica si está en rango
+        return distance <= self.detection_radius
+        
+    def make_decision(self):
+        if self.test_value():
+            if self.player_attacking:
+                return self.kinematic_flee
+            return "attack"
+        return "patrol"
+    
+class Exp2AttackAction(Action):
+    def __init__(self, enemy, direction, attack_sprites_right, attack_sprites_left):
+        self.enemy = enemy
+        self.direction = direction
+        self.attack_sprites_right = attack_sprites_right
+        self.attack_sprites_left = attack_sprites_left
+        
+    def make_decision(self):
+        self.enemy["is_attacking"] = True
+        return "attack"
+
+class PlayerAttackingDecision:
+    def __init__(self, flee_action, attack_action):
+        self.flee_action = flee_action
+        self.attack_action = attack_action
+        
+    def make_decision(self, is_player_attacking):
+        if is_player_attacking:
+            return self.flee_action
+        return self.attack_action

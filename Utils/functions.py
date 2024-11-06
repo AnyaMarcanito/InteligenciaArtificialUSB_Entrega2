@@ -90,7 +90,7 @@ def encontrar_NPC_cercano(player_x, player_y, NPC_positions, tile_graph, tile_si
     """
     mejor_distancia = float('inf')
     mejor_camino = None
-    experimento_objetivo = None
+    objetivo = None
 
     for NPC in NPC_positions:
         camino = get_path(player_x, player_y, NPC["x"], NPC["y"], tile_graph, tile_size)
@@ -100,9 +100,9 @@ def encontrar_NPC_cercano(player_x, player_y, NPC_positions, tile_graph, tile_si
             if distancia < mejor_distancia:
                 mejor_distancia = distancia
                 mejor_camino = camino
-                experimento_objetivo = NPC
+                objetivo = NPC
 
-    return mejor_camino, experimento_objetivo
+    return mejor_camino, objetivo
 
 # Función para dibujar el camino
 def draw_path(screen, path, camera_x, camera_y, tile_size):

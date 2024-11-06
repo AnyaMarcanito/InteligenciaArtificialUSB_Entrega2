@@ -91,7 +91,6 @@ class AttackAction(Action):
         self.attack_sprites_left = attack_sprites_left
         
     def make_decision(self):
-        print("Attack action triggered!")
         return "attack"
 
 class PlayerReachedDecision(Decision):
@@ -117,13 +116,29 @@ class PlayerReachedDecision(Decision):
         dy = self.player_pos[1] - self.enemy_pos[1]
         distance = math.sqrt(dx*dx + dy*dy)
         return isinstance(self.false_node.make_decision(), KinematicArrive) and distance <= self.arrival_radius
-
-class AttackAction(Action):
-    def __init__(self, enemy, direction, attack_sprites_right, attack_sprites_left):
+    
+class DisappearAction(Action):
+    def __init__(self, enemy, direction, disappear_sprites_right, disappear_sprites_left):
         self.enemy = enemy
         self.direction = direction
-        self.attack_sprites_right = attack_sprites_right
-        self.attack_sprites_left = attack_sprites_left
+        self.disappear_sprites_right = disappear_sprites_right
+        self.disappear_sprites_left = disappear_sprites_left
         
     def make_decision(self):
-        return "attack"
+        return "disappear"
+
+# Clase que representa la decisión del jugador cuando está atacando
+class PlayerAttackingInRangeDecision(Decision):
+    def __init__(self, enemy_pos, player_pos, player_attacking, detection_radius, true_node, false_node):
+        super().__init__(true_node, false_node)
+        self.enemy_pos = enemy_pos
+        self.player_pos = player_pos
+        self.player_attacking = player_attacking
+        self.detection_radius = detection_radius
+        
+    def test_value(self):
+        dx = self.player_pos[0] - self.enemy_pos[0]
+        dy = self.player_pos[1] - self.enemy_pos[1]
+        distance = math.sqrt(dx*dx + dy*dy)
+
+        return self.player_attacking and distance <= self.detection_radius

@@ -184,6 +184,18 @@ def test_player_in_range_and_zone(NPC_pos, player_pos):
     
     return in_range and in_zone
 
+def reset_experiment1():
+    NPC_positions[0]["x"] = 1000
+    NPC_positions[0]["y"] = 680
+    global exp1_pathfinding, pastel_visible
+    exp1_pathfinding = False
+    pastel_visible = False
+
+def reset_experiment2():
+    global exp2_pathfinding, taza_visible
+    exp2_pathfinding = False 
+    taza_visible = False
+
 # BUCLE DE JUEGO---------------------------------------------------------------------------------------------------------------------
 while True:
     # FPS
@@ -233,9 +245,6 @@ while True:
     elif keys[pygame.K_SPACE]:
         show_path = True
         current_path, target_exp = encontrar_NPC_cercano(PLAYER_x, PLAYER_y, NPC_positions, tile_graph, tile_size)
-        # Se acerca al npc más cercano
-        current_path, target_exp = encontrar_NPC_cercano(PLAYER_x, PLAYER_y, NPC_positions, tile_graph, tile_size)
-
         # Si se utilizó path finding
         if current_path:
             next_node = current_path[0].to_node
@@ -253,6 +262,17 @@ while True:
                 
                 new_x = PLAYER_x + dx
                 new_y = PLAYER_y + dy
+
+                if abs(dx) > abs(dy):
+                    direccion = 'derecha' if dx > 0 else 'izquierda'
+                    current_sprite = PLAYER_rightMov[int(PLAYER_steps)] if dx > 0 else PLAYER_leftMov[int(PLAYER_steps)]
+                else:
+                    direccion = 'arriba' if dy < 0 else 'abajo'
+                    current_sprite = PLAYER_upMov[int(PLAYER_steps)] if dy < 0 else PLAYER_downMov[int(PLAYER_steps)]
+            
+                PLAYER_steps += PLAYER_animation_speed
+                if PLAYER_steps >= len(PLAYER_rightMov):
+                    PLAYER_steps = 0
                 
                 if not check_collision(new_x, new_y, scaled_maze):
                     PLAYER_x = new_x

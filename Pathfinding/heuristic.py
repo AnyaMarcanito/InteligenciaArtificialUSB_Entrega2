@@ -24,5 +24,6 @@ class Heuristic(ABC):
     
     @abstractmethod
     def estimate_between(self, from_node: Node, to_node: Node) -> float:
-        """Calculate the estimated cost between any two nodes"""
-        pass
+        dx = abs(to_node.x - from_node.x)
+        dy = abs(to_node.y - from_node.y)
+        return dx + dy
