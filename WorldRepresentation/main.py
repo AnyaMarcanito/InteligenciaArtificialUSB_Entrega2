@@ -3,7 +3,7 @@
 # @author Anya Marcano
 # @date 2024/11/05
 
-import pygame, sys
+import pygame, sys, math
 from tileGraph import TileGraph
 from Movements.kinematicArrive import KinematicArrive
 from Movements.kinematicFlee import KinematicFlee
@@ -11,7 +11,6 @@ from Movements.kinematicArriveDecision import KinematicArriveAction, PatrolActio
 from Movements.kinematicFleeDecision import KinematicFleeAction
 from pygame.locals import *
 from Utils.functions import *
-import math
 
 # PANTALLA --------------------------------------------------------------------------------------------------------------------------------
 # Inicialización del juego
@@ -107,9 +106,9 @@ scaled_eriol = pygame.transform.scale(
 
 # Variables de las acciones
 NPC_YUE_DETECTION_RADIUS = 100
-NPC_YUE_FLEE_SPEED = 4
+NPC_YUE_FLEE_SPEED = 3
 NPC_YUE_MIN_X = 150
-NPC_YUE_MAX_X = 900
+NPC_YUE_MAX_X = 1100
 
 # Imagenes del personaje 2 -> Yue
 NPC_yue = pygame.image.load(".\Assets\YueStanding.png")
@@ -126,7 +125,7 @@ scaled_yue = pygame.transform.scale(
 # Posiciones de los NPC
 NPC_positions = [
     {"x": 800, "y": 800, "sprite": scaled_eriol, "sprites_right": NPC_rightMovEriol, "sprites_left": NPC_leftMovEriol, "is_attacking": False},
-    {"x": 600, "y": 500, "sprite": scaled_yue, "sprites_right": NPC_rightMovYue, "sprites_left": NPC_leftMovYue, "is_attacking": False}
+    {"x": 500, "y": 200, "sprite": scaled_yue, "sprites_right": NPC_rightMovYue, "sprites_left": NPC_leftMovYue, "is_attacking": False}
 ]
 
 # OBSTACLE--------------------------------------------------------------------------------------------------------------------------------
@@ -148,6 +147,10 @@ obstacle_positions = [
     {"x": 200, "y": 200},
     {"x": 200, "y": 800},
     {"x": 1500, "y": 800}, 
+    {"x": 1000, "y": 1000},
+    {"x": 800, "y": 800},
+    {"x": 500, "y": 600}
+
 ]
 
 # Escalar tamaño
