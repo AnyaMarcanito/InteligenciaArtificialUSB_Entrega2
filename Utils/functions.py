@@ -23,7 +23,6 @@ def load_and_scale_image(path, scale_factor=1):
     scaled_image = pygame.transform.scale(image, (int(image.get_width() * scale_factor), int(image.get_height() * scale_factor)))
     return scaled_image
 
-# Función para verificar si el jugador colisiona con el laberinto
 def check_collision(x, y, scaled_maze):
     """
     Verifica si el jugador colisiona con el laberinto
@@ -36,6 +35,10 @@ def check_collision(x, y, scaled_maze):
     :return: bool
     True si el jugador colisiona con el laberinto, False en caso contrario
     """
+    # Verificar si la posición está dentro de los límites del mapa
+    if x < 0 or y < 0 or x >= scaled_maze.get_width() or y >= scaled_maze.get_height():
+        return True
+    
     # Obtener el color del píxel en la posición del jugador
     try:
         color = scaled_maze.get_at((int(x), int(y)))

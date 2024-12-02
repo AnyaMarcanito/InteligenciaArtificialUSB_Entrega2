@@ -11,6 +11,7 @@ from Movements.dynamicArriveDecision import DynamicArriveAction, PatrolAction, I
 from Movements.dynamicFleeDecision import *
 from pygame.locals import *
 from Utils.functions import *
+from Movements.collisionAvoidance import CollisionAvoidance
 
 # PANTALLA --------------------------------------------------------------------------------------------------------------------------------
 # Inicialización del juego
@@ -88,7 +89,7 @@ NPC_MAX_SPEED = 3
 NPC_ERIOL_DETECTION_RADIUS = 100
 NPC_ERIOL_ARRIVAL_RADIUS = 300
 NPC_ERIOL_SLOW_RADIUS = 150  
-NPC_MAX_ACCELERATION = 0.5  
+NPC_MAX_ACCELERATION = 0.5
 ERIOL_MIN_X = 0
 ERIOL_MAX_X = 3000
 
@@ -107,10 +108,10 @@ scaled_eriol = pygame.transform.scale(
 )
 
 # Variables de las acciones
-NPC_YUE_DETECTION_RADIUS = 100
+NPC_YUE_DETECTION_RADIUS = 200
 NPC_YUE_FLEE_SPEED = 3
-NPC_YUE_MIN_X = 150
-NPC_YUE_MAX_X = 1100
+NPC_YUE_MIN_X = 0
+NPC_YUE_MAX_X = 2000
 
 # Imagenes del personaje 2 -> Yue
 NPC_yue = pygame.image.load(".\Assets\YueStanding.png")
@@ -127,7 +128,7 @@ scaled_yue = pygame.transform.scale(
 # Posiciones de los NPC
 NPC_positions = [
     {"x": 800, "y": 800, "sprite": scaled_eriol, "sprites_right": NPC_rightMovEriol, "sprites_left": NPC_leftMovEriol, "is_attacking": False},
-    {"x": 500, "y": 200, "sprite": scaled_yue, "sprites_right": NPC_rightMovYue, "sprites_left": NPC_leftMovYue, "is_attacking": False}
+    {"x": 500, "y": 500, "sprite": scaled_yue, "sprites_right": NPC_rightMovYue, "sprites_left": NPC_leftMovYue, "is_attacking": False}
 ]
 
 # OBSTACLE--------------------------------------------------------------------------------------------------------------------------------
@@ -411,63 +412,46 @@ while True:
                 NPC_MAX_ACCELERATION,
                 NPC_YUE_DETECTION_RADIUS
             )
-            patrol_action = PatrolAction(NPC, NPC_directions[i])
+            collision_avoidance = CollisionAvoidance(
+                NPC,
+                obstacle_positions,
+                max_avoid_force=1.0,
+                avoid_radius=50
+            )
             flee_decision = DynamicFleeDecision(
                 (NPC["x"], NPC["y"]),
                 (PLAYER_x, PLAYER_y),
-                NPC["is_attacking"],
                 NPC_YUE_DETECTION_RADIUS,
-                dynamic_flee,
-                patrol_action,
-                NPC_YUE_MIN_X,
-                NPC_YUE_MAX_X
+                dynamic_flee
             )
             action = flee_decision.make_decision()
 
             # Si el jugador está cerca, Yue huye
             if isinstance(action, DynamicFleeAction):
+                print("Yue está huyendo")
                 steering = action.getSteering()
+                avoid_steering = collision_avoidance.getSteering()
                 if steering:
-                    new_x = NPC["x"] + steering.linear.x
-                    new_y = NPC["y"] + steering.linear.y 
-                    if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X:
-                        NPC["x"] = new_x
-                        NPC["y"] = new_y 
-                    NPC_directions[i] = 'right' if steering.linear.x > 0 else 'left'
-
-            # Si no, Yue patrulla
+                    # Calcular la nueva posición
+                    new_x = NPC["x"] + (steering.linear.x + avoid_steering.linear.x) * clock.get_time() / 1000.0
+                    new_y = NPC["y"] + (steering.linear.y + avoid_steering.linear.y) * clock.get_time() / 1000.0
+                    print(f"Steering linear: {steering.linear}, Avoid steering: {avoid_steering.linear}, new_x: {new_x}, new_y: {new_y}")
+                    # Verificar colisiones antes de actualizar la posición
+                    if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X and 0 <= new_y <= MAP_HEIGHT:
+                        if not check_collision(new_x, new_y, scaled_maze):
+                            NPC["x"] = new_x
+                            NPC["y"] = new_y
+                            print(f"Yue se movió a: x={new_x}, y={new_y}")
+                        else:
+                            print("Colisión detectada al intentar huir, rodeando la pared")
+                            # Intentar rodear la pared
+                            if not check_collision(NPC["x"], new_y, scaled_maze):
+                                NPC["y"] = new_y
+                            elif not check_collision(new_x, NPC["y"], scaled_maze):
+                                NPC["x"] = new_x
             else:
-                if NPC_directions[i] == 'right':
-                    new_x = NPC["x"] + NPC_SPEED
-                    if new_x > NPC_YUE_MAX_X:
-                        NPC_directions[i] = 'left'
-                else:
-                    new_x = NPC["x"] - NPC_SPEED
-                    if new_x < NPC_YUE_MIN_X:
-                        NPC_directions[i] = 'right'
-                if check_collision(new_x, NPC["y"], scaled_maze):
-                    NPC_directions[i] = 'left' if NPC_directions[i] == 'right' else 'right'
-                else:
-                    NPC["x"] = new_x
-                
-        # ANIMACIONES---------------------------------------------------------------------------------------------------------------------
-        if not NPC["is_attacking"]:
-            NPC_steps[i] += 0.2
-            if NPC_directions[i] == 'right':
-                sprites = NPC["sprites_right"]
-            else:
-                sprites = NPC["sprites_left"]
-            
-            if NPC_steps[i] >= len(sprites):
-                NPC_steps[i] = 0
-            
-            current_frame = int(NPC_steps[i])
-            NPC["sprite"] = pygame.transform.scale(
-                sprites[current_frame],
-                (int(sprites[current_frame].get_width() * NPC_SCALE),
-                int(sprites[current_frame].get_height() * NPC_SCALE))
-            )
-    
+                print("Yue se detiene")
+        
     # ANIMACION DE LOS OBSTACULOS---------------------------------------------------------------------------------------------------------------------
     for i, obstacle in enumerate(obstacle_positions):
         if not obstacle_states[i]["exploding"]:
