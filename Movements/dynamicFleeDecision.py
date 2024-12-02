@@ -35,20 +35,31 @@ class DynamicFleeAction(Action):
     def make_decision(self):
         return self.getSteering()
 class DynamicFleeDecision(Decision):
-    def __init__(self, enemy_pos, player_pos, detection_radius, dynamic_flee):
-        super().__init__(None, dynamic_flee)
+    def __init__(self, enemy_pos, player_pos, detection_radius_large, detection_radius_small, dynamic_flee, patrol_action):
+        super().__init__(patrol_action, dynamic_flee)
         self.enemy_pos = enemy_pos
         self.player_pos = player_pos
-        self.detection_radius = detection_radius
+        self.detection_radius_large = detection_radius_large
+        self.detection_radius_small = detection_radius_small
         self.dynamic_flee = dynamic_flee
+        self.patrol_action = patrol_action
 
     def test_value(self):
         dx = self.player_pos[0] - self.enemy_pos[0]
         dy = self.player_pos[1] - self.enemy_pos[1]
         distance = math.sqrt(dx*dx + dy*dy)
-        return distance <= self.detection_radius
+        if distance <= self.detection_radius_small:
+            return "flee"
+        elif distance <= self.detection_radius_large:
+            return "stop"
+        else:
+            return "patrol"
         
     def make_decision(self):
-        if self.test_value():
+        decision = self.test_value()
+        if decision == "flee":
             return self.dynamic_flee
-        return None
+        elif decision == "stop":
+            return "stop"
+        else:
+            return self.patrol_action

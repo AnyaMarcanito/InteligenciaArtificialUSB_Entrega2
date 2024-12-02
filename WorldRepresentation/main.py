@@ -108,10 +108,14 @@ scaled_eriol = pygame.transform.scale(
 )
 
 # Variables de las acciones
-NPC_YUE_DETECTION_RADIUS = 200
+NPC_YUE_DETECTION_RADIUS_LARGE = 300
+NPC_YUE_DETECTION_RADIUS_SMALL = 200
 NPC_YUE_FLEE_SPEED = 3
 NPC_YUE_MIN_X = 0
 NPC_YUE_MAX_X = 2000
+# Colores para los radios de detección
+COLOR_DETECTION_LARGE = (255, 0, 0)  
+COLOR_DETECTION_SMALL = (0, 255, 0)
 
 # Imagenes del personaje 2 -> Yue
 NPC_yue = pygame.image.load(".\Assets\YueStanding.png")
@@ -410,32 +414,29 @@ while True:
                 NPC,
                 (PLAYER_x, PLAYER_y),
                 NPC_MAX_ACCELERATION,
-                NPC_YUE_DETECTION_RADIUS
+                NPC_YUE_DETECTION_RADIUS_SMALL
             )
-            collision_avoidance = CollisionAvoidance(
-                NPC,
-                obstacle_positions,
-                max_avoid_force=1.0,
-                avoid_radius=50
-            )
+            patrol_action = PatrolAction(NPC, NPC_directions[i])
             flee_decision = DynamicFleeDecision(
                 (NPC["x"], NPC["y"]),
                 (PLAYER_x, PLAYER_y),
-                NPC_YUE_DETECTION_RADIUS,
-                dynamic_flee
+                NPC_YUE_DETECTION_RADIUS_LARGE,
+                NPC_YUE_DETECTION_RADIUS_SMALL,
+                dynamic_flee,
+                patrol_action
             )
             action = flee_decision.make_decision()
 
-            # Si el jugador está cerca, Yue huye
-            if isinstance(action, DynamicFleeAction):
+            if action == "stop":
+                print("Yue se detiene")
+            elif isinstance(action, DynamicFleeAction):
                 print("Yue está huyendo")
                 steering = action.getSteering()
-                avoid_steering = collision_avoidance.getSteering()
                 if steering:
                     # Calcular la nueva posición
-                    new_x = NPC["x"] + (steering.linear.x + avoid_steering.linear.x) * clock.get_time() / 1000.0
-                    new_y = NPC["y"] + (steering.linear.y + avoid_steering.linear.y) * clock.get_time() / 1000.0
-                    print(f"Steering linear: {steering.linear}, Avoid steering: {avoid_steering.linear}, new_x: {new_x}, new_y: {new_y}")
+                    new_x = NPC["x"] + steering.linear.x * clock.get_time() / 1000.0
+                    new_y = NPC["y"] + steering.linear.y * clock.get_time() / 1000.0
+                    print(f"Steering linear: {steering.linear}, new_x: {new_x}, new_y: {new_y}")
                     # Verificar colisiones antes de actualizar la posición
                     if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X and 0 <= new_y <= MAP_HEIGHT:
                         if not check_collision(new_x, new_y, scaled_maze):
@@ -450,8 +451,37 @@ while True:
                             elif not check_collision(new_x, NPC["y"], scaled_maze):
                                 NPC["x"] = new_x
             else:
-                print("Yue se detiene")
-        
+                print("Yue está patrullando")
+                if NPC_directions[i] == 'right':
+                    new_x = NPC["x"] + NPC_SPEED
+                    if new_x > NPC_YUE_MAX_X:
+                        NPC_directions[i] = 'left'
+                elif NPC_directions[i] == 'left':
+                    new_x = NPC["x"] - NPC_SPEED
+                    if new_x < NPC_YUE_MIN_X:
+                        NPC_directions[i] = 'right'
+                elif NPC_directions[i] == 'up':
+                    new_y = NPC["y"] - NPC_SPEED
+                    if new_y < 0:
+                        NPC_directions[i] = 'down'
+                elif NPC_directions[i] == 'down':
+                    new_y = NPC["y"] + NPC_SPEED
+                    if new_y > MAP_HEIGHT:
+                        NPC_directions[i] = 'up'
+                
+                if not check_collision(new_x, new_y, scaled_maze):
+                    NPC["x"] = new_x
+                    NPC["y"] = new_y
+                    print(f"Yue patrulló a: x={new_x}, y={new_y}")
+                    
+    # DIBUJAR RADIOS DE DETECCIÓN DE YUE---------------------------------------------------------------------------------------------------------------------
+    for NPC in NPC_positions:
+        if NPC["sprite"] == scaled_yue:
+            # Dibujar el radio de detección grande
+            pygame.draw.circle(SCREEN, COLOR_DETECTION_LARGE, (NPC["x"] - camera_x, NPC["y"] - camera_y), NPC_YUE_DETECTION_RADIUS_LARGE, 1)
+            # Dibujar el radio de detección pequeño
+            pygame.draw.circle(SCREEN, COLOR_DETECTION_SMALL, (NPC["x"] - camera_x, NPC["y"] - camera_y), NPC_YUE_DETECTION_RADIUS_SMALL, 1)
+
     # ANIMACION DE LOS OBSTACULOS---------------------------------------------------------------------------------------------------------------------
     for i, obstacle in enumerate(obstacle_positions):
         if not obstacle_states[i]["exploding"]:
