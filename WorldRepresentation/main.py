@@ -5,10 +5,10 @@
 
 import pygame, sys, math
 from tileGraph import TileGraph
-from Movements.kinematicArrive import KinematicArrive
-from Movements.kinematicFlee import KinematicFlee
-from Movements.kinematicArriveDecision import KinematicArriveAction, PatrolAction, InRangeDecision, AttackAction, PlayerReachedDecision
-from Movements.kinematicFleeDecision import KinematicFleeAction
+from Movements.dynamicArrive import DynamicArrive
+from Movements.dynamicFlee import DynamicFlee
+from Movements.dynamicArriveDecision import DynamicArriveAction, PatrolAction, InRangeDecision, AttackAction, PlayerReachedDecision
+from Movements.dynamicFleeDecision import *
 from pygame.locals import *
 from Utils.functions import *
 
@@ -87,6 +87,8 @@ NPC_MAX_SPEED = 3
 # Variables de l personaje 1 -> Eriol
 NPC_ERIOL_DETECTION_RADIUS = 100
 NPC_ERIOL_ARRIVAL_RADIUS = 300
+NPC_ERIOL_SLOW_RADIUS = 150  
+NPC_MAX_ACCELERATION = 0.5  
 ERIOL_MIN_X = 0
 ERIOL_MAX_X = 3000
 
@@ -344,13 +346,13 @@ while True:
     for i, NPC in enumerate(NPC_positions):
         # Comportamiento de Eriol
         if i == 0:
-            kinematic_action = KinematicArriveAction(NPC, (PLAYER_x, PLAYER_y), NPC_MAX_SPEED, NPC_ERIOL_ARRIVAL_RADIUS)
+            dynamic_action = DynamicArriveAction(NPC, (PLAYER_x, PLAYER_y), NPC_MAX_SPEED, NPC_MAX_ACCELERATION, NPC_ERIOL_ARRIVAL_RADIUS, NPC_ERIOL_SLOW_RADIUS)
             patrol_action = PatrolAction(NPC, NPC_directions[i])
             # Se determina la decisión
             chase_decision = InRangeDecision(
                 (NPC["x"], NPC["y"]),
                 (PLAYER_x, PLAYER_y),
-                kinematic_action,
+                dynamic_action,
                 patrol_action,
                 test_player_in_range_and_zone
             )
@@ -381,13 +383,13 @@ while True:
                     int(attack_sprites[current_frame].get_height() * NPC_SCALE))
                 )
             # Si esta cerca, Eriol persigue al jugador
-            elif isinstance(action, KinematicArrive):
+            elif isinstance(action, DynamicArrive):
                 NPC["is_attacking"] = False
                 steering = action.getSteering()
                 if steering:
-                    new_x = NPC["x"] + steering.velocity.x
+                    new_x = NPC["x"] + steering.linear.x
                     NPC["x"] = new_x
-                    NPC_directions[i] = 'right' if steering.velocity.x > 0 else 'left'
+                    NPC_directions[i] = 'right' if steering.linear.x > 0 else 'left'
                     
             # Si no, Eriol patrulla
             elif action == "patrol":
@@ -403,37 +405,35 @@ while True:
 
         # Comportamiento de Yue
         else:
-            kinematic_flee = KinematicFleeAction(
+            dynamic_flee = DynamicFleeAction(
                 NPC,
                 (PLAYER_x, PLAYER_y),
-                NPC_YUE_FLEE_SPEED,
-                NPC_YUE_DETECTION_RADIUS,
-                MAP_WIDTH,
-                MAP_HEIGHT,
-                NPC_YUE_MIN_X,
-                NPC_YUE_MAX_X
+                NPC_MAX_ACCELERATION,
+                NPC_YUE_DETECTION_RADIUS
             )
             patrol_action = PatrolAction(NPC, NPC_directions[i])
-            flee_decision = InRangeDecision(
+            flee_decision = DynamicFleeDecision(
                 (NPC["x"], NPC["y"]),
                 (PLAYER_x, PLAYER_y),
-                kinematic_flee,
+                NPC["is_attacking"],
+                NPC_YUE_DETECTION_RADIUS,
+                dynamic_flee,
                 patrol_action,
-                lambda pos1, pos2: (
-                    math.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) <= NPC_YUE_DETECTION_RADIUS
-                    and NPC_YUE_MIN_X <= pos1[0] <= NPC_YUE_MAX_X
-                )
+                NPC_YUE_MIN_X,
+                NPC_YUE_MAX_X
             )
             action = flee_decision.make_decision()
 
             # Si el jugador está cerca, Yue huye
-            if isinstance(action, KinematicFlee):
+            if isinstance(action, DynamicFleeAction):
                 steering = action.getSteering()
                 if steering:
-                    new_x = NPC["x"] + steering.velocity.x
+                    new_x = NPC["x"] + steering.linear.x
+                    new_y = NPC["y"] + steering.linear.y 
                     if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X:
                         NPC["x"] = new_x
-                    NPC_directions[i] = 'right' if steering.velocity.x > 0 else 'left'
+                        NPC["y"] = new_y 
+                    NPC_directions[i] = 'right' if steering.linear.x > 0 else 'left'
 
             # Si no, Yue patrulla
             else:
