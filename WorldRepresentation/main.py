@@ -4,7 +4,7 @@
 # @date 2024/11/05
 
 import pygame, sys, math
-from tileGraph import TileGraph
+from tileGraph import *
 from Movements.dynamicArrive import DynamicArrive
 from Movements.dynamicFlee import DynamicFlee
 from Movements.dynamicArriveDecision import DynamicArriveAction, PatrolAction, InRangeDecision, AttackAction, PlayerReachedDecision
@@ -33,7 +33,7 @@ scaled_maze = pygame.transform.scale(
 SCREEN.blit(background, (0,0))
 
 # Configuracion para el World Representation (Tile Graph)
-tile_size = 32
+tile_size = 66
 tile_graph = TileGraph(scaled_maze, tile_size)
 maze_mask = pygame.mask.from_surface(scaled_maze)
 show_path = False
@@ -108,14 +108,16 @@ scaled_eriol = pygame.transform.scale(
 )
 
 # Variables de las acciones
-NPC_YUE_DETECTION_RADIUS_LARGE = 300
-NPC_YUE_DETECTION_RADIUS_SMALL = 200
-NPC_YUE_FLEE_SPEED = 3
+NPC_YUE_DETECTION_RADIUS = 300
+NPC_YUE_ARRIVAL_RADIUS = 1
+NPC_YUE_FLEE_SPEED = 100
 NPC_YUE_MIN_X = 0
-NPC_YUE_MAX_X = 2000
+NPC_YUE_MAX_X = 5000
 # Colores para los radios de detección
 COLOR_DETECTION_LARGE = (255, 0, 0)  
 COLOR_DETECTION_SMALL = (0, 255, 0)
+# Definir la posición original de Yue
+NPC_YUE_ORIGINAL_POSITION = {"x": 500, "y": 500} 
 
 # Imagenes del personaje 2 -> Yue
 NPC_yue = pygame.image.load(".\Assets\YueStanding.png")
@@ -169,7 +171,8 @@ scaled_obstacle = pygame.transform.scale(
 
 # Estados
 obstacle_states = [{"exploding": False, "frame": 0} for _ in obstacle_positions]
-
+# CLOW BOOK--------------------------------------------------------------------------------------------------------------------------------
+BOOK_OF_CLOW_POSITION = {"x": 1000, "y": 1000}
 # PATHFINDING-------------------------------------------------------------------------------------------------------------------------
 # Variables para Pathfinding
 current_path = None
@@ -346,7 +349,10 @@ while True:
     SCREEN.blit(scaled_maze, (-camera_x, -camera_y))
     tile_graph.draw_world_representation(SCREEN, camera_x, camera_y)
     SCREEN.blit(scaled_current_sprite, (PLAYER_x - camera_x - scaled_current_sprite.get_width()//2, PLAYER_y - camera_y - scaled_current_sprite.get_height()//2))
-    
+    # Variable para almacenar el camino calculado
+    yue_path = None
+    yue_stuck_counter = 0 
+
     # DECISIONES DE LOS NPC---------------------------------------------------------------------------------------------------------------------
     for i, NPC in enumerate(NPC_positions):
         # Comportamiento de Eriol
@@ -407,80 +413,194 @@ while True:
                     NPC_directions[i] = 'left' if NPC_directions[i] == 'right' else 'right'
                 else:
                     NPC["x"] = new_x
-
         # Comportamiento de Yue
         else:
             dynamic_flee = DynamicFleeAction(
                 NPC,
                 (PLAYER_x, PLAYER_y),
                 NPC_MAX_ACCELERATION,
-                NPC_YUE_DETECTION_RADIUS_SMALL
+                NPC_YUE_DETECTION_RADIUS
             )
-            patrol_action = PatrolAction(NPC, NPC_directions[i])
+            move_to_book_action = MoveToBookAction(
+                NPC,
+                BOOK_OF_CLOW_POSITION,
+                NPC_YUE_FLEE_SPEED
+            )
+            follow_player_action = FollowPlayerAction(
+                NPC,
+                (PLAYER_x, PLAYER_y),
+                NPC_YUE_FLEE_SPEED
+            )
+            return_to_original_position_action = ReturnToOriginalPositionAction(
+                NPC,
+                NPC_YUE_ORIGINAL_POSITION,
+                NPC_YUE_FLEE_SPEED
+            )
+            collision_avoidance = CollisionAvoidance(
+                NPC,
+                obstacle_positions,
+                max_avoid_force=1.0,
+                avoid_radius=50
+            )
             flee_decision = DynamicFleeDecision(
                 (NPC["x"], NPC["y"]),
                 (PLAYER_x, PLAYER_y),
-                NPC_YUE_DETECTION_RADIUS_LARGE,
-                NPC_YUE_DETECTION_RADIUS_SMALL,
+                NPC_YUE_DETECTION_RADIUS,
                 dynamic_flee,
-                patrol_action
+                move_to_book_action,
+                follow_player_action,
+                return_to_original_position_action
             )
             action = flee_decision.make_decision()
 
             if action == "stop":
                 print("Yue se detiene")
-            elif isinstance(action, DynamicFleeAction):
-                print("Yue está huyendo")
+            elif isinstance(action, MoveToBookAction):
+                print("Yue se mueve hacia el libro de Clow")
                 steering = action.getSteering()
+                avoid_steering = collision_avoidance.getSteering()
                 if steering:
                     # Calcular la nueva posición
-                    new_x = NPC["x"] + steering.linear.x * clock.get_time() / 1000.0
-                    new_y = NPC["y"] + steering.linear.y * clock.get_time() / 1000.0
-                    print(f"Steering linear: {steering.linear}, new_x: {new_x}, new_y: {new_y}")
-                    # Verificar colisiones antes de actualizar la posición
+                    new_x = NPC["x"] + (steering.x + avoid_steering.linear.x) * clock.get_time() / 1000.0
+                    new_y = NPC["y"] + (steering.y + avoid_steering.linear.y) * clock.get_time() / 1000.0
+                    print(f"Steering linear: {steering}, Avoid steering: {avoid_steering.linear}, new_x: {new_x}, new_y: {new_y}")
+                    # Verificar colisiones y bordes antes de actualizar la posición
                     if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X and 0 <= new_y <= MAP_HEIGHT:
                         if not check_collision(new_x, new_y, scaled_maze):
                             NPC["x"] = new_x
                             NPC["y"] = new_y
+                            yue_stuck_counter = 0  # Resetear el contador si Yue se mueve
                             print(f"Yue se movió a: x={new_x}, y={new_y}")
                         else:
-                            print("Colisión detectada al intentar huir, rodeando la pared")
-                            # Intentar rodear la pared
-                            if not check_collision(NPC["x"], new_y, scaled_maze):
-                                NPC["y"] = new_y
-                            elif not check_collision(new_x, NPC["y"], scaled_maze):
-                                NPC["x"] = new_x
-            else:
-                print("Yue está patrullando")
-                if NPC_directions[i] == 'right':
-                    new_x = NPC["x"] + NPC_SPEED
-                    if new_x > NPC_YUE_MAX_X:
-                        NPC_directions[i] = 'left'
-                elif NPC_directions[i] == 'left':
-                    new_x = NPC["x"] - NPC_SPEED
-                    if new_x < NPC_YUE_MIN_X:
-                        NPC_directions[i] = 'right'
-                elif NPC_directions[i] == 'up':
-                    new_y = NPC["y"] - NPC_SPEED
-                    if new_y < 0:
-                        NPC_directions[i] = 'down'
-                elif NPC_directions[i] == 'down':
-                    new_y = NPC["y"] + NPC_SPEED
-                    if new_y > MAP_HEIGHT:
-                        NPC_directions[i] = 'up'
-                
-                if not check_collision(new_x, new_y, scaled_maze):
-                    NPC["x"] = new_x
-                    NPC["y"] = new_y
-                    print(f"Yue patrulló a: x={new_x}, y={new_y}")
-                    
-    # DIBUJAR RADIOS DE DETECCIÓN DE YUE---------------------------------------------------------------------------------------------------------------------
-    for NPC in NPC_positions:
-        if NPC["sprite"] == scaled_yue:
-            # Dibujar el radio de detección grande
-            pygame.draw.circle(SCREEN, COLOR_DETECTION_LARGE, (NPC["x"] - camera_x, NPC["y"] - camera_y), NPC_YUE_DETECTION_RADIUS_LARGE, 1)
-            # Dibujar el radio de detección pequeño
-            pygame.draw.circle(SCREEN, COLOR_DETECTION_SMALL, (NPC["x"] - camera_x, NPC["y"] - camera_y), NPC_YUE_DETECTION_RADIUS_SMALL, 1)
+                            print("Colisión detectada al intentar moverse hacia el libro de Clow")
+                            yue_stuck_counter += 1
+                            if yue_stuck_counter > 10:  # Si Yue está atrapado por más de 10 ciclos
+                                # Implementar lógica de escape
+                                NPC["x"] += tile_size if NPC["x"] % tile_size == 0 else -tile_size
+                                NPC["y"] += tile_size if NPC["y"] % tile_size == 0 else -tile_size
+                                yue_stuck_counter = 0  # Resetear el contador después de la lógica de escape
+                            else:
+                                # Usar pathfinding para encontrar una ruta alrededor del obstáculo
+                                start = TileNode(NPC["x"] // tile_size, NPC["y"] // tile_size)
+                                goal = TileNode(BOOK_OF_CLOW_POSITION["x"] // tile_size, BOOK_OF_CLOW_POSITION["y"] // tile_size)
+                                heuristic = ManhattanHeuristic(goal)
+                                yue_path = pathfind_astar(tile_graph, start, goal, heuristic)
+                                if yue_path:
+                                    next_step = yue_path[0].to_node
+                                    NPC["x"] = next_step.x * tile_size
+                                    NPC["y"] = next_step.y * tile_size
+                    else:
+                        print("Yue se encuentra en el borde del grafo, recalculando el camino")
+                        # Usar pathfinding para encontrar una ruta alrededor del obstáculo
+                        start = TileNode(NPC["x"] // tile_size, NPC["y"] // tile_size)
+                        goal = TileNode(BOOK_OF_CLOW_POSITION["x"] // tile_size, BOOK_OF_CLOW_POSITION["y"] // tile_size)
+                        heuristic = ManhattanHeuristic(goal)
+                        yue_path = pathfind_astar(tile_graph, start, goal, heuristic)
+                        if yue_path:
+                            next_step = yue_path[0].to_node
+                            NPC["x"] = next_step.x * tile_size
+                            NPC["y"] = next_step.y * tile_size
+            elif isinstance(action, FollowPlayerAction):
+                print("Yue está siguiendo al jugador")
+                steering = action.getSteering()
+                avoid_steering = collision_avoidance.getSteering()
+                if steering:
+                    # Calcular la nueva posición
+                    new_x = NPC["x"] + (steering.x + avoid_steering.linear.x) * clock.get_time() / 1000.0
+                    new_y = NPC["y"] + (steering.y + avoid_steering.linear.y) * clock.get_time() / 1000.0
+                    print(f"Steering linear: {steering}, Avoid steering: {avoid_steering.linear}, new_x: {new_x}, new_y: {new_y}")
+                    # Verificar colisiones y bordes antes de actualizar la posición
+                    if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X and 0 <= new_y <= MAP_HEIGHT:
+                        if not check_collision(new_x, new_y, scaled_maze):
+                            NPC["x"] = new_x
+                            NPC["y"] = new_y
+                            yue_stuck_counter = 0  # Resetear el contador si Yue se mueve
+                            print(f"Yue se movió a: x={new_x}, y={new_y}")
+                        else:
+                            print("Colisión detectada al intentar seguir al jugador")
+                            yue_stuck_counter += 1
+                            if yue_stuck_counter > 10:  # Si Yue está atrapado por más de 10 ciclos
+                                # Implementar lógica de escape
+                                NPC["x"] += tile_size if NPC["x"] % tile_size == 0 else -tile_size
+                                NPC["y"] += tile_size if NPC["y"] % tile_size == 0 else -tile_size
+                                yue_stuck_counter = 0  # Resetear el contador después de la lógica de escape
+                            else:
+                                # Usar pathfinding para encontrar una ruta alrededor del obstáculo
+                                start = TileNode(NPC["x"] // tile_size, NPC["y"] // tile_size)
+                                goal = TileNode(PLAYER_x // tile_size, PLAYER_y // tile_size)
+                                heuristic = ManhattanHeuristic(goal)
+                                yue_path = pathfind_astar(tile_graph, start, goal, heuristic)
+                                if yue_path:
+                                    next_step = yue_path[0].to_node
+                                    NPC["x"] = next_step.x * tile_size
+                                    NPC["y"] = next_step.y * tile_size
+                    else:
+                        print("Yue se encuentra en el borde del grafo, recalculando el camino")
+                        # Usar pathfinding para encontrar una ruta alrededor del obstáculo
+                        start = TileNode(NPC["x"] // tile_size, NPC["y"] // tile_size)
+                        goal = TileNode(PLAYER_x // tile_size, PLAYER_y // tile_size)
+                        heuristic = ManhattanHeuristic(goal)
+                        yue_path = pathfind_astar(tile_graph, start, goal, heuristic)
+                        if yue_path:
+                            next_step = yue_path[0].to_node
+                            NPC["x"] = next_step.x * tile_size
+                            NPC["y"] = next_step.y * tile_size
+            elif isinstance(action, ReturnToOriginalPositionAction):
+                print("Yue vuelve a su posición original")
+                steering = action.getSteering()
+                avoid_steering = collision_avoidance.getSteering()
+                if steering:
+                    # Calcular la nueva posición
+                    new_x = NPC["x"] + (steering.x + avoid_steering.linear.x) * clock.get_time() / 1000.0
+                    new_y = NPC["y"] + (steering.y + avoid_steering.linear.y) * clock.get_time() / 1000.0
+                    print(f"Steering linear: {steering}, Avoid steering: {avoid_steering.linear}, new_x: {new_x}, new_y: {new_y}")
+                    # Verificar colisiones y bordes antes de actualizar la posición
+                    if NPC_YUE_MIN_X <= new_x <= NPC_YUE_MAX_X and 0 <= new_y <= MAP_HEIGHT:
+                        if not check_collision(new_x, new_y, scaled_maze):
+                            NPC["x"] = new_x
+                            NPC["y"] = new_y
+                            yue_stuck_counter = 0  # Resetear el contador si Yue se mueve
+                            print(f"Yue se movió a: x={new_x}, y={new_y}")
+                        else:
+                            print("Colisión detectada al intentar volver a la posición original")
+                            yue_stuck_counter += 1
+                            if yue_stuck_counter > 10:  # Si Yue está atrapado por más de 10 ciclos
+                                # Implementar lógica de escape
+                                NPC["x"] += tile_size if NPC["x"] % tile_size == 0 else -tile_size
+                                NPC["y"] += tile_size if NPC["y"] % tile_size == 0 else -tile_size
+                                yue_stuck_counter = 0  # Resetear el contador después de la lógica de escape
+                            else:
+                                # Usar pathfinding para encontrar una ruta alrededor del obstáculo
+                                start = TileNode(NPC["x"] // tile_size, NPC["y"] // tile_size)
+                                goal = TileNode(NPC_YUE_ORIGINAL_POSITION["x"] // tile_size, NPC_YUE_ORIGINAL_POSITION["y"] // tile_size)
+                                heuristic = ManhattanHeuristic(goal)
+                                yue_path = pathfind_astar(tile_graph, start, goal, heuristic)
+                                if yue_path:
+                                    next_step = yue_path[0].to_node
+                                    NPC["x"] = next_step.x * tile_size
+                                    NPC["y"] = next_step.y * tile_size
+
+        # DIBUJAR EL CAMINO DE YUE---------------------------------------------------------------------------------------------------------------------
+        if yue_path:
+            for connection in yue_path:
+                from_node = connection.from_node
+                to_node = connection.to_node
+                pygame.draw.line(SCREEN, (0, 255, 0), 
+                                (from_node.x * tile_size - camera_x, from_node.y * tile_size - camera_y),
+                                (to_node.x * tile_size - camera_x, to_node.y * tile_size - camera_y), 4)
+
+        # DIBUJAR EL RADIO DE DETECCIÓN DE YUE---------------------------------------------------------------------------------------------------------------------
+        for NPC in NPC_positions:
+            if NPC == NPC_positions[1]:  # Asumiendo que Yue es el segundo NPC en la lista
+                pygame.draw.circle(SCREEN, (255, 0, 0), (NPC["x"] - camera_x, NPC["y"] - camera_y), NPC_YUE_DETECTION_RADIUS, 1)
+
+        # DIBUJAR LA POSICIÓN ORIGINAL DE YUE---------------------------------------------------------------------------------------------------------------------
+        pygame.draw.line(SCREEN, (0, 0, 0), 
+                        (NPC_YUE_ORIGINAL_POSITION["x"] - 5 - camera_x, NPC_YUE_ORIGINAL_POSITION["y"] - 5 - camera_y), 
+                        (NPC_YUE_ORIGINAL_POSITION["x"] + 5 - camera_x, NPC_YUE_ORIGINAL_POSITION["y"] + 5 - camera_y), 2)
+        pygame.draw.line(SCREEN, (0, 0, 0), 
+                        (NPC_YUE_ORIGINAL_POSITION["x"] + 5 - camera_x, NPC_YUE_ORIGINAL_POSITION["y"] - 5 - camera_y), 
+                        (NPC_YUE_ORIGINAL_POSITION["x"] - 5 - camera_x, NPC_YUE_ORIGINAL_POSITION["y"] + 5 - camera_y), 2)
 
     # ANIMACION DE LOS OBSTACULOS---------------------------------------------------------------------------------------------------------------------
     for i, obstacle in enumerate(obstacle_positions):
