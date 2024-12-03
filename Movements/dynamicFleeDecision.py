@@ -39,7 +39,7 @@ class DynamicFleeDecision:
         self.npc_position = npc_position
         self.player_position = player_position
         self.detection_radius = detection_radius
-        self.detection_radius_small = detection_radius * 0.5  # Ajusta este valor según sea necesario
+        self.detection_radius_small = detection_radius * 0.1  # Ajusta este valor según sea necesario
         self.detection_radius_large = detection_radius * 1.5  # Ajusta este valor según sea necesario
         self.dynamic_flee = dynamic_flee
         self.move_to_book_action = move_to_book_action
@@ -83,6 +83,18 @@ class FollowPlayerAction:
         if direction.length() > 0:
             direction = direction.normalize() * self.speed
         return direction
+    
+class MoveToPlayerAction:
+    def __init__(self, npc, player_position, chase_speed):
+        self.npc = npc
+        self.player_position = player_position
+        self.chase_speed = chase_speed
+
+    def getSteering(self):
+        direction = pygame.math.Vector2(self.player_position[0] - self.npc["x"], self.player_position[1] - self.npc["y"])
+        if direction.length() > 0:
+            direction = direction.normalize() * self.chase_speed
+        return SteeringOutput(direction.x, direction.y)
     
 class ReturnToOriginalPositionAction:
     def __init__(self, npc, original_position, speed):
